@@ -1,11 +1,11 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 class QuizDataStub {
 
@@ -43,72 +43,15 @@ class QuizDataStub {
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-            if (response.statusCode() == 200) {
-                return parseJsonToQuestions(response.body());
-            }
+            List<Question> list = mapper.readValue(
+                jsonResponse, 
+                new TypeReference<List<Question>>(){}
+            );
+            return list;
         } catch (Exception e) {
             // Silently fail so the app falls back to offline mode
             // e.printStackTrace(); // Uncomment to debug
         }
         return null;
-    }
-
-    // 3. Simple Manual JSON Parser (No external libraries like Gson/Jackson needed)
-    private static List<Question> parseJsonToQuestions(String json) {
-        List<Question> list = new ArrayList<>();
-        
-        // Regex to find objects like { ... }
-        Pattern objectPattern = Pattern.compile("\\{.*?\\}", Pattern.DOTALL);
-        Matcher objectMatcher = objectPattern.matcher(json);
-
-        while (objectMatcher.find()) {
-            String qBlock = objectMatcher.group();
-
-            // Extract Question
-            String qText = extractValue(qBlock, "question");
-            
-            // Extract Correct Index
-            String correctStr = extractValue(qBlock, "correctIndex");
-            int correctIdx = 0;
-            try { correctIdx = Integer.parseInt(correctStr); } catch (Exception e) {}
-
-            // Extract Choices (Manual Array Parsing)
-            List<String> choicesList = new ArrayList<>();
-            Pattern choicePattern = Pattern.compile("\"([^\"]+)\""); // Finds strings inside quotes
-            // We need to look specifically inside the "choices" part, 
-            // but for a simple hack, scanning the whole block usually works 
-            // if we skip the first match (which is the question key).
-            
-            // Better approach for choices:
-            int choicesStart = qBlock.indexOf("[");
-            int choicesEnd = qBlock.indexOf("]");
-            if(choicesStart != -1 && choicesEnd != -1) {
-                String choicesArray = qBlock.substring(choicesStart, choicesEnd);
-                Matcher m = choicePattern.matcher(choicesArray);
-                while(m.find()) {
-                    choicesList.add(m.group(1));
-                }
-            }
-
-            if (choicesList.size() >= 4) {
-                list.add(new Question(qText, choicesList.toArray(new String[0]), correctIdx));
-            }
-        }
-        return list;
-    }
-
-    // Helper to extract "key": "value" or "key": 123
-    private static String extractValue(String source, String key) {
-        // Look for "key" : "value"
-        Pattern pString = Pattern.compile("\"" + key + "\"\\s*:\\s*\"([^\"]+)\"");
-        Matcher mString = pString.matcher(source);
-        if (mString.find()) return mString.group(1);
-
-        // Look for "key" : 123
-        Pattern pInt = Pattern.compile("\"" + key + "\"\\s*:\\s*(\\d+)");
-        Matcher mInt = pInt.matcher(source);
-        if (mInt.find()) return mInt.group(1);
-        
-        return "Unknown";
     }
 }
